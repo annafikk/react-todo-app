@@ -1,5 +1,5 @@
 # Gunakan node image sebagai base untuk build stage
-FROM node:18 AS build
+FROM node:18-alpine AS build
 
 # Set working directory
 WORKDIR /app
@@ -14,18 +14,24 @@ RUN npm install
 COPY . .
 
 # Build aplikasi untuk production
-RUN npm run build
+RUN npm run build 
 
-# Gunakan nginx untuk production stage
-FROM nginx:alpine
-RUN chmod -R 777 /var
+# Production stage: Use httpd (Apache) image for serving the app
+FROM httpd:alpine AS production
 
-# Salin build output ke NGINX public folder
-COPY --from=build /app/build /usr/share/nginx/html
+# Copy the build output to the Apache document root
+COPY --from=build /app/build /usr/local/apache2/htdocs/
+RUN mkdir -p /usr/local/apache2/logs
+RUN chmod -R 777 /usr/local/apache2
 
-# Ekspose port 80
-EXPOSE 80
+# Ubah Apache untuk mendengarkan di port 8080
+RUN sed -i 's/Listen 80/Listen 8080/' /usr/local/apache2/conf/httpd.conf
 
-# Jalankan NGINX
-CMD ["nginx", "-g", "daemon off;"]
+# Set the server name to suppress warnings
+RUN echo 'ServerName 127.0.0.1' >> /usr/local/apache2/conf/httpd.conf
 
+# Expose port 8080
+EXPOSE 8080
+
+# Set the entrypoint to keep the Apache server running
+CMD ["httpd-foreground"]
